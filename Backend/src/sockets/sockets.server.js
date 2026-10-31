@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const userModel = require("../models/user.model");
 const aiService = require("../services/ai.service");
 const messageModel = require("../models/message.model");
+const allowedOrigins = require("../config/cors");
 
 const { createMemory, queryMemory } = require("../services/vector.service");
 
@@ -32,20 +33,23 @@ function toFileParts(attachments) {
 function initSocketServer(httpServer) {
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.CLIENT_URL || "http://localhost:5173",
+      origin: allowedOrigins, // localhost + Vercel + CLIENT_URL
       credentials: true,
     },
     maxHttpBufferSize: 2e7, // 20 MB => attachments ke liye
   });
 
-  // Authentication Middleware (cookie se JWT)
+  // Authentication Middleware (cookie ya auth.token se JWT)
   io.use(async (socket, next) => {
     try {
       const cookies = cookie.parse(socket.handshake.headers?.cookie || "");
-      if (!cookies.token) {
+      const token = cookies.token || socket.handshake.auth?.token;
+
+      if (!token) {
         return next(new Error("Authentication error: No token provided"));
       }
-      const decoded = jwt.verify(cookies.token, process.env.JWT_SECRET);
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const user = await userModel.findById(decoded.id);
       if (!user) return next(new Error("User not found"));
 
