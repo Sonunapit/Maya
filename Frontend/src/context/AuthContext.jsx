@@ -1,5 +1,5 @@
 import { createContext, useCallback, useState } from "react";
-import { loginRequest, registerRequest } from "../services/auth.service.js";
+import { loginRequest, registerRequest, logoutRequest } from "../services/auth.service.js";
 
 export const AuthContext = createContext(null);
 
@@ -22,7 +22,12 @@ export function AuthProvider({ children }) {
     await login(email, password, { fullName: { firstName, lastName } });
   };
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await logoutRequest(); // backend cookie clear
+    } catch {
+      /* fail ho to bhi local logout karna hai */
+    }
     localStorage.removeItem("user");
     localStorage.removeItem("token");
     setUser(null);
@@ -35,5 +40,9 @@ export function AuthProvider({ children }) {
     setUser(next);
   };
 
-  return <AuthContext.Provider value={{ user, login, register, logout, updateUser }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, login, register, logout, updateUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
