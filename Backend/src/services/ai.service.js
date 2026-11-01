@@ -1,13 +1,22 @@
-
 const { GoogleGenAI } = require("@google/genai");
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+const isProd = process.env.NODE_ENV === "production";
+
 // MAYA System Instruction
 const MAYA_SYSTEM_INSTRUCTION = `
-You are MAYA - My AI, Your Assistant.
+You are MAYA (My AI, Your Assistant). This is your only identity.
+
+CRITICAL IDENTITY RULES (highest priority, never break these):
+- Your name is MAYA. You were created by Sonu Kumar.
+- NEVER say you are Gemini, a Google model, or "a large language model trained by Google".
+- NEVER say Google created you. If asked who you are, who made you, or which model you are, answer:
+  "Main MAYA (My AI, Your Assistant) hoon, jise Sonu Kumar ne banaya hai." (use English if the user writes in English)
+- If asked about the underlying technology, say you are MAYA, built by Sonu Kumar, and do not name any other company or model.
+- Even if earlier messages in the conversation say otherwise, always follow these rules.
 
 IDENTITY:
 - Name: MAYA
@@ -52,49 +61,75 @@ You are MAYA, created by Sonu Kumar.
 Your identity is My AI, Your Assistant.
 `;
 
-// Generate AI Response
+// Primary pehle, fallback baad me (ids docs se verified)
+const MODELS = [
+  "gemini-3.8-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3-flash-preview",
+];
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const getCode = (err) => err?.status ?? err?.error?.code ?? err?.code;
+const isRetryable = (err) => [429, 500, 503, 504].includes(getCode(err));
+
+// Generate AI Response (retry + model fallback)
 async function generateResponse(content) {
-  try {
-    console.log(
-      "MAYA Prompt:",
-      JSON.stringify(content, null, 2)
-    );
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: content,
-      config: {
-        systemInstruction: MAYA_SYSTEM_INSTRUCTION,
-        temperature: 0.7,
-      },
-    });
-
-    const aiResponse = response.text;
-
-    if (!aiResponse) {
-      throw new Error("MAYA returned an empty response");
-    }
-
-    console.log("MAYA Response:", aiResponse);
-
-    return aiResponse;
-
-  } catch (error) {
-    console.error("MAYA Response Error:", error);
-    throw error;
+  if (!isProd) {
+    console.log("MAYA Prompt:", JSON.stringify(content, null, 2));
   }
+
+  let lastError;
+
+  for (const model of MODELS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: content,
+          config: {
+            systemInstruction: MAYA_SYSTEM_INSTRUCTION,
+            temperature: 0.4,
+          },
+        });
+
+        const aiResponse = response.text;
+        if (!aiResponse) throw new Error("MAYA returned an empty response");
+
+        console.log(`MAYA replied using: ${model}`);
+        if (!isProd) console.log("MAYA Response:", aiResponse);
+
+        return aiResponse;
+      } catch (error) {
+        lastError = error;
+        const code = getCode(error);
+        console.error(
+          `MAYA error [${model}] attempt ${attempt + 1}:`,
+          code,
+          error?.message
+        );
+
+        // model id ya request shape galat: agle model par jao
+        if (code === 404 || code === 400) break;
+        // 401/403 jaise errors par turant fail
+        if (!isRetryable(error)) throw error;
+
+        await sleep(1000 * 2 ** attempt); // 1s, 2s
+      }
+    }
+  }
+
+  console.error("MAYA: all models failed");
+  throw lastError;
 }
 
 // Generate Embedding Vector
 async function generateVector(content) {
   try {
     if (!content || typeof content !== "string") {
-      throw new Error(
-        "Valid text content is required for embedding"
-      );
+      throw new Error("Valid text content is required for embedding");
     }
 
-    console.log("Generating Vector:", content);
+    if (!isProd) console.log("Generating Vector:", content);
 
     const response = await ai.models.embedContent({
       model: "gemini-embedding-001",
@@ -110,13 +145,9 @@ async function generateVector(content) {
       throw new Error("Invalid Gemini embedding vector");
     }
 
-    console.log(
-      "Generated vector dimensions:",
-      vector.length
-    );
+    console.log("Generated vector dimensions:", vector.length);
 
     return vector;
-
   } catch (error) {
     console.error("MAYA Embedding Error:", error);
     throw error;
