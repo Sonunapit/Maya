@@ -5,3 +5,6 @@ export const loginRequest = (email, password) =>
 
 export const registerRequest = ({ email, firstName, lastName, password }) =>
   api.post("/auth/register", { email, fullName: { firstName, lastName }, password }).then((r) => r.data);
+
+export const logoutRequest = () =>
+  api.post("/auth/logout").then((r) => r.data);

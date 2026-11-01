@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useInstallPrompt } from "../../hooks/useInstallPrompt";
 
-/* iPhone ke liye guide (iOS me direct install prompt nahi hota) */
+/* Help dialog: iPhone (direct prompt nahi hota) ya manual install ke liye */
 function IosHelp({ open, onClose, title = "iPhone par Install", children }) {
   return (
     <AnimatePresence>
@@ -23,11 +23,14 @@ function IosHelp({ open, onClose, title = "iPhone par Install", children }) {
   );
 }
 
+const ManualText = () => (
+  <>Chrome/Edge mein address bar ke right wala <b>Install</b> icon dabao, ya menu <b>⋮</b> → <b>Install app</b> / <b>Add to Home screen</b> chuno.</>
+);
+
 /* ---- Header button: theme toggle ke bagal me lagao. Install ke baad apne aap gayab. ---- */
 export function InstallButton({ className = "", showLabel = false }) {
   const { canInstall, installed, isIOS, install } = useInstallPrompt();
   const [help, setHelp] = useState(null); // null | "ios" | "manual"
-  // pehli baar click hone tak highlight animation chalti rahegi
   const [seen, setSeen] = useState(() => { try { return localStorage.getItem("maya_btn_seen") === "1"; } catch { return false; } });
   if (installed) return null;
 
@@ -52,9 +55,7 @@ export function InstallButton({ className = "", showLabel = false }) {
         </button>
       </span>
       <IosHelp open={help === "ios"} onClose={() => setHelp(null)} />
-      <IosHelp open={help === "manual"} onClose={() => setHelp(null)} title="MAYA App Install Karo">
-        Chrome/Edge mein address bar ke right wala <b>Install</b> icon dabao, ya menu <b>⋮</b> → <b>Install app</b> / <b>Add to Home screen</b> chuno.
-      </IosHelp>
+      <IosHelp open={help === "manual"} onClose={() => setHelp(null)} title="MAYA App Install Karo"><ManualText /></IosHelp>
     </>
   );
 }
@@ -63,11 +64,14 @@ export function InstallButton({ className = "", showLabel = false }) {
 export default function InstallPopup() {
   const { shouldPrompt, install, snooze, later } = useInstallPrompt();
   const [ready, setReady] = useState(false);
-  const [iosHelp, setIosHelp] = useState(false);
+  const [help, setHelp] = useState(null); // null | "ios" | "manual"
 
   useEffect(() => { const t = setTimeout(() => setReady(true), 1500); return () => clearTimeout(t); }, []);
 
-  const onInstall = async () => { if ((await install()) === "ios") setIosHelp(true); };
+  const onInstall = async () => {
+    const r = await install();
+    if (r === "ios" || r === "manual") setHelp(r);
+  };
   const open = ready && shouldPrompt;
 
   return (
@@ -91,7 +95,8 @@ export default function InstallPopup() {
           </motion.div>
         )}
       </AnimatePresence>
-      <IosHelp open={iosHelp} onClose={() => setIosHelp(false)} />
+      <IosHelp open={help === "ios"} onClose={() => setHelp(null)} />
+      <IosHelp open={help === "manual"} onClose={() => setHelp(null)} title="MAYA App Install Karo"><ManualText /></IosHelp>
     </>
   );
 }

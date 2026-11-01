@@ -28,8 +28,9 @@ export function useInstallPrompt() {
   const snoozed = Date.now() < Number(ls.get("maya_snooze") || 0);
   const laterNow = !!sessionStorage.getItem("maya_later");
 
+  // returns: "accepted" | "dismissed" | "ios" | "manual"
   const install = async () => {
-    if (!deferred) return "ios";
+    if (!deferred) return isIOS ? "ios" : "manual";
     deferred.prompt();
     const { outcome } = await deferred.userChoice;
     if (outcome === "accepted") ls.set("maya_installed", "1");
